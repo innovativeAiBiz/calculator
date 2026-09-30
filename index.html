@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>간편 계산기</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #667085;
+      --panel: rgba(255, 255, 255, 0.94);
+      --line: #e4e7ec;
+      --key: #f8fafc;
+      --accent: #356ae6;
+      --accent-dark: #2855bd;
+      --danger: #c43232;
+      font-family: Inter, Pretendard, "Noto Sans KR", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 0;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px 16px;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 15% 5%, #dfeaff 0, transparent 35%),
+        linear-gradient(145deg, #f8fafc, #eef2f8);
+    }
+
+    main {
+      width: min(100%, 420px);
+      margin: 0 auto;
+    }
+
+    .calculator {
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.8);
+      border-radius: 24px;
+      background: var(--panel);
+      box-shadow: 0 20px 60px rgba(37, 50, 75, 0.14);
+    }
+
+    header { padding: 24px 24px 12px; }
+    h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+    header p { margin: 6px 0 0; color: var(--muted); font-size: 0.85rem; }
+
+    .display-wrap { padding: 12px 24px 20px; }
+    .expression {
+      min-height: 22px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .display {
+      min-height: 58px;
+      overflow: hidden;
+      font-size: clamp(2rem, 10vw, 3rem);
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .display.error { color: var(--danger); font-size: 1.6rem; }
+
+    .keys {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0 16px 20px;
+    }
+    button {
+      min-width: 0;
+      min-height: 58px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      color: var(--ink);
+      background: var(--key);
+      box-shadow: 0 2px 4px rgba(16, 24, 40, 0.04);
+      font: inherit;
+      font-size: 1.15rem;
+      font-weight: 650;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    button:hover { filter: brightness(0.98); }
+    button:active { transform: translateY(1px); }
+    button:focus-visible { outline: 3px solid rgba(53, 106, 230, 0.3); outline-offset: 2px; }
+    .utility { color: var(--accent-dark); background: #edf3ff; }
+    .operator { color: #9a4f00; background: #fff4e8; }
+    .equals { border-color: var(--accent); color: white; background: var(--accent); }
+    .equals:hover { background: var(--accent-dark); }
+
+    .history { border-top: 1px solid var(--line); padding: 18px 24px 24px; }
+    .history-head { display: flex; align-items: center; justify-content: space-between; }
+    h2 { margin: 0; font-size: 1rem; }
+    .history-clear {
+      min-height: auto;
+      border: 0;
+      padding: 5px 0;
+      color: var(--muted);
+      background: transparent;
+      box-shadow: none;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+    .history-list { margin: 12px 0 0; padding: 0; list-style: none; }
+    .history-list li {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      padding: 9px 0;
+      border-bottom: 1px solid #f0f2f5;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .history-list li:last-child { border: 0; }
+    .history-list strong { color: var(--ink); overflow-wrap: anywhere; }
+    .empty { justify-content: center !important; color: #98a2b3 !important; }
+
+    @media (max-width: 390px) {
+      body { padding: 12px 10px; }
+      .calculator { border-radius: 20px; }
+      header, .display-wrap { padding-left: 18px; padding-right: 18px; }
+      .keys { gap: 8px; padding-left: 12px; padding-right: 12px; }
+      button { min-height: 54px; }
+      .history { padding-left: 18px; padding-right: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="calculator" aria-label="사칙연산 계산기">
+      <header>
+        <h1>간편 계산기</h1>
+        <p>마우스 또는 키보드로 입력하세요.</p>
+      </header>
+
+      <div class="display-wrap" aria-live="polite" aria-atomic="true">
+        <div class="expression" id="expression">&nbsp;</div>
+        <div class="display" id="display">0</div>
+      </div>
+
+      <div class="keys" id="keys">
+        <button type="button" class="utility" data-action="clear">AC</button>
+        <button type="button" class="utility" data-action="delete" aria-label="한 글자 삭제">⌫</button>
+        <button type="button" class="operator" data-value="/" aria-label="나누기">÷</button>
+        <button type="button" class="operator" data-value="*" aria-label="곱하기">×</button>
+        <button type="button" data-value="7">7</button>
+        <button type="button" data-value="8">8</button>
+        <button type="button" data-value="9">9</button>
+        <button type="button" class="operator" data-value="-" aria-label="빼기">−</button>
+        <button type="button" data-value="4">4</button>
+        <button type="button" data-value="5">5</button>
+        <button type="button" data-value="6">6</button>
+        <button type="button" class="operator" data-value="+" aria-label="더하기">+</button>
+        <button type="button" data-value="1">1</button>
+        <button type="button" data-value="2">2</button>
+        <button type="button" data-value="3">3</button>
+        <button type="button" class="equals" data-action="equals">=</button>
+        <button type="button" data-value="0" style="grid-column: span 2">0</button>
+        <button type="button" data-value=".">.</button>
+        <button type="button" class="equals" data-action="equals" aria-label="계산 실행">Enter</button>
+      </div>
+
+      <section class="history" aria-labelledby="history-title">
+        <div class="history-head">
+          <h2 id="history-title">최근 계산</h2>
+          <button type="button" class="history-clear" id="historyClear">기록 지우기</button>
+        </div>
+        <ol class="history-list" id="historyList"></ol>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const display = document.getElementById('display');
+      const expression = document.getElementById('expression');
+      const historyList = document.getElementById('historyList');
+      const operators = ['+', '-', '*', '/'];
+      const symbols = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+      let tokens = [];
+      let current = '0';
+      let replaceCurrent = false;
+      let awaitingOperand = false;
+      let error = false;
+      let history = [];
+
+      const pretty = (items) => items.map((item) => symbols[item] || item).join(' ');
+      const formatNumber = (value) => {
+        if (!Number.isFinite(value)) return null;
+        const rounded = Math.abs(value) < 1e-12 ? 0 : Number(value.toPrecision(12));
+        return String(rounded);
+      };
+
+      function render() {
+        display.textContent = current;
+        display.classList.toggle('error', error);
+        expression.innerHTML = tokens.length ? pretty(tokens) : '&nbsp;';
+        historyList.innerHTML = '';
+        if (!history.length) {
+          const li = document.createElement('li');
+          li.className = 'empty';
+          li.textContent = '아직 계산 기록이 없습니다.';
+          historyList.appendChild(li);
+          return;
+        }
+        history.forEach((entry) => {
+          const li = document.createElement('li');
+          const formula = document.createElement('span');
+          const result = document.createElement('strong');
+          formula.textContent = pretty(entry.tokens);
+          result.textContent = `= ${entry.result}`;
+          li.append(formula, result);
+          historyList.appendChild(li);
+        });
+      }
+
+      function clearAll() {
+        tokens = [];
+        current = '0';
+        replaceCurrent = false;
+        awaitingOperand = false;
+        error = false;
+        render();
+      }
+
+      function recoverIfNeeded() {
+        if (!error) return;
+        tokens = [];
+        current = '0';
+        replaceCurrent = false;
+        awaitingOperand = false;
+        error = false;
+      }
+
+      function inputDigit(value) {
+        recoverIfNeeded();
+        if (replaceCurrent) {
+          tokens = [];
+          current = value;
+          replaceCurrent = false;
+        } else if (awaitingOperand) {
+          current = value;
+          awaitingOperand = false;
+        } else if (current === '0') {
+          current = value;
+        } else if (current.length < 16) {
+          current += value;
+        }
+        render();
+      }
+
+      function inputDecimal() {
+        recoverIfNeeded();
+        if (replaceCurrent) {
+          tokens = [];
+          current = '0.';
+          replaceCurrent = false;
+        } else if (awaitingOperand) {
+          current = '0.';
+          awaitingOperand = false;
+        } else if (!current.includes('.')) {
+          current += '.';
+        }
+        render();
+      }
+
+      function inputOperator(operator) {
+        if (error) return;
+        if (replaceCurrent && tokens.length === 0) replaceCurrent = false;
+        if (awaitingOperand && tokens.length && operators.includes(tokens.at(-1))) {
+          tokens[tokens.length - 1] = operator;
+        } else {
+          tokens.push(current, operator);
+        }
+        current = '0';
+        awaitingOperand = true;
+        replaceCurrent = false;
+        render();
+      }
+
+      function calculate(items) {
+        const work = items.slice();
+        for (const op of ['*', '/']) {
+          let index;
+          while ((index = work.indexOf(op)) !== -1) {
+            const left = Number(work[index - 1]);
+            const right = Number(work[index + 1]);
+            if (op === '/' && right === 0) return null;
+            work.splice(index - 1, 3, op === '*' ? left * right : left / right);
+          }
+        }
+        let result = Number(work[0]);
+        for (let i = 1; i < work.length; i += 2) {
+          result = work[i] === '+' ? result + Number(work[i + 1]) : result - Number(work[i + 1]);
+        }
+        return formatNumber(result);
+      }
+
+      function equals() {
+        if (error) return;
+        if (!tokens.length) return;
+        const complete = operators.includes(tokens.at(-1)) ? [...tokens, current] : [...tokens];
+        const result = calculate(complete);
+        if (result === null) {
+          tokens = complete;
+          current = '0으로 나눌 수 없습니다';
+          error = true;
+          awaitingOperand = false;
+          replaceCurrent = true;
+          render();
+          return;
+        }
+        history.unshift({ tokens: complete, result });
+        history = history.slice(0, 5);
+        tokens = [];
+        current = result;
+        awaitingOperand = false;
+        replaceCurrent = true;
+        render();
+      }
+
+      function deleteOne() {
+        if (error) {
+          clearAll();
+          return;
+        }
+        if (replaceCurrent) return;
+        current = current.length > 1 ? current.slice(0, -1) : '0';
+        if (current === '-') current = '0';
+        render();
+      }
+
+      function handleValue(value) {
+        if (/^\d$/.test(value)) inputDigit(value);
+        else if (value === '.') inputDecimal();
+        else if (operators.includes(value)) inputOperator(value);
+      }
+
+      document.getElementById('keys').addEventListener('click', (event) => {
+        const button = event.target.closest('button');
+        if (!button) return;
+        if (button.dataset.value) handleValue(button.dataset.value);
+        else if (button.dataset.action === 'clear') clearAll();
+        else if (button.dataset.action === 'delete') deleteOne();
+        else if (button.dataset.action === 'equals') equals();
+      });
+
+      document.getElementById('historyClear').addEventListener('click', () => {
+        history = [];
+        render();
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (/^\d$/.test(event.key) || operators.includes(event.key) || event.key === '.') {
+          event.preventDefault();
+          handleValue(event.key);
+        } else if (event.key === 'Enter' || event.key === '=') {
+          event.preventDefault();
+          equals();
+        } else if (event.key === 'Backspace' || event.key === 'Delete') {
+          event.preventDefault();
+          deleteOne();
+        } else if (event.key === 'Escape') {
+          clearAll();
+        }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
